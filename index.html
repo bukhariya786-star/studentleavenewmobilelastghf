@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bukhariya Fest - Live Slideshow</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --gold: #fbbf24;
+            --silver: #e2e8f0;
+            --maroon: #991b1b;
+            --accent: #22d3ee;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-dark);
+            color: white;
+            overflow: hidden; /* സ്ക്രോളിംഗ് ഒഴിവാക്കി */
+        }
+
+        /* മുകളിലെ ടീം ടോട്ടൽ ബാർ */
+        .top-bar {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            padding: 20px 40px;
+            background: rgba(0,0,0,0.6);
+            border-bottom: 3px solid var(--accent);
+            align-items: center;
+        }
+
+        .team-box { display: flex; align-items: center; gap: 20px; }
+        .team-name { font-size: 1.5rem; font-weight: 800; }
+        .team-score { font-size: 2.5rem; font-weight: 900; color: var(--accent); }
+        .fest-title { text-align: center; font-size: 1.2rem; letter-spacing: 3px; color: var(--gold); }
+
+        /* സ്ലൈഡ് കണ്ടെയ്നർ */
+        #display-container {
+            height: calc(100vh - 120px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1000px;
+        }
+
+        .result-slide {
+            width: 85%;
+            max-width: 1000px;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 40px;
+            padding: 50px;
+            border: 2px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: slideIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideIn {
+            from { transform: rotateY(-20deg) scale(0.8); opacity: 0; }
+            to { transform: rotateY(0) scale(1); opacity: 1; }
+        }
+
+        .rank-circle {
+            width: 120px; height: 120px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 4rem; font-weight: 900;
+            margin-bottom: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .rank-1 { background: var(--gold); color: #000; box-shadow: 0 0 60px var(--gold); }
+        .rank-2 { background: var(--silver); color: #000; box-shadow: 0 0 40px var(--silver); }
+        .rank-3 { background: var(--maroon); color: #fff; box-shadow: 0 0 40px var(--maroon); }
+
+        .event-category { color: var(--accent); font-size: 1.2rem; text-transform: uppercase; font-weight: 600; }
+        .participant { font-size: 4rem; font-weight: 900; margin: 10px 0; line-height: 1.1; }
+        .team-tag { background: rgba(255,255,255,0.1); padding: 10px 30px; border-radius: 50px; font-size: 1.5rem; }
+        .score-val { font-size: 3rem; margin-top: 20px; color: var(--gold); font-weight: 800; }
+        .remarks { margin-top: 15px; font-size: 1.2rem; font-style: italic; color: #4ade80; }
+
+        /* ലോഗോ അല്ലെങ്കിൽ ഐക്കൺ */
+        .decoration { position: absolute; bottom: 20px; right: 40px; opacity: 0.2; font-size: 5rem; }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <div class="team-box">
+        <span class="team-name">തമാമിയ</span>
+        <span class="team-score" id="team1-total">0</span>
+    </div>
+    <div class="fest-title">BUKHARIYA ARTS FEST<br><small id="status">LIVE UPDATING...</small></div>
+    <div class="team-box" style="justify-content: flex-end;">
+        <span class="team-score" id="team2-total">0</span>
+        <span class="team-name">ബാത്തിമിയ</span>
+    </div>
+</div>
+
+<div id="display-container">
+    </div>
+
+<script>
+    const tsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ56O5aSnw7A1i-9sD2blisxpJI3OHDoZjBhDNUehlwQMHmISN9gH5e4eBNBgnIm5FU4JvHEjgZUUb8/pub?gid=0&single=true&output=tsv';
+
+    let allResults = [];
+    let currentIndex = 0;
+
+    async function loadData() {
+        try {
+            const response = await fetch(tsvUrl);
+            const data = await response.text();
+            const rows = data.split('\n').slice(1);
+            
+            let t1 = 0, t2 = 0;
+            allResults = [];
+
+            rows.forEach(row => {
+                const col = row.split('\t');
+                if (col.length < 5) return;
+                
+                const score = parseInt(col[4]) || 0;
+                if (col[2].includes("തമാമിയ")) t1 += score;
+                if (col[2].includes("ബാത്തിമിയ")) t2 += score;
+
+                allResults.push({
+                    event: col[0],
+                    name: col[1],
+                    team: col[2],
+                    category: col[3],
+                    score: col[4],
+                    rank: col[5]?.trim(),
+                    remarks: col[6]
+                });
+            });
+
+            document.getElementById('team1-total').innerText = t1;
+            document.getElementById('team2-total').innerText = t2;
+        } catch (e) { console.error(e); }
+    }
+
+    function showNextSlide() {
+        if (allResults.length === 0) return;
+        
+        const data = allResults[currentIndex];
+        const container = document.getElementById('display-container');
+        
+        let rStyle = data.rank === '1' ? 'rank-1' : (data.rank === '2' ? 'rank-2' : (data.rank === '3' ? 'rank-3' : ''));
+
+        container.innerHTML = `
+            <div class="result-slide">
+                <div class="event-category">${data.event} | ${data.category}</div>
+                <div class="rank-circle ${rStyle}">${data.rank}</div>
+                <div class="participant">${data.name}</div>
+                <div class="team-tag">Team: ${data.team}</div>
+                <div class="score-val">POINTS: ${data.score}</div>
+                <div class="remarks">${data.remarks || ''}</div>
+                <div class="decoration">⭐</div>
+            </div>
+        `;
+
+        // 1st Rank ആണെങ്കിൽ മാത്രം മനോഹരമായ തോരണങ്ങൾ
+        if (data.rank === '1') {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#fbbf24', '#ffffff', '#22d3ee']
+            });
+        }
+
+        currentIndex = (currentIndex + 1) % allResults.length;
+    }
+
+    // ഓരോ 3 സെക്കൻഡിലും സ്ലൈഡ് മാറുന്നു
+    setInterval(showNextSlide, 3000);
+
+    // ഓരോ മിനിറ്റിലും പുതിയ ഡാറ്റ ഷീറ്റിൽ നിന്ന് എടുക്കുന്നു
+    loadData();
+    setInterval(loadData, 60000);
+
+</script>
+</body>
+</html>
